@@ -1,0 +1,13 @@
+{
+  "version": "0.1.0",
+  "component": {
+    "minified": 18442,
+    "gzip": 7358
+  },
+  "package": {
+    "gzip": 639980,
+    "unpacked": 684449
+  },
+  "sourceMap": false,
+  "method": "Vite production build; Hypnogram export only; React and react/jsx-runtime external; gzip level 9; decimal kB."
+}

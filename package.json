@@ -1,0 +1,64 @@
+{
+  "name": "react-hypnogram",
+  "version": "0.1.0",
+  "description": "Customizable SVG hypnograms and sleep stage charts for React and TypeScript.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "docs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build:example": "vite build",
+    "preview": "vite preview --host 127.0.0.1",
+    "test": "vitest run",
+    "test:package": "node scripts/test-package.mjs",
+    "typecheck": "tsc --noEmit",
+    "build:types": "tsc -p tsconfig.build.json",
+    "check": "npm run typecheck && npm test && npm run build && npm run test:package && node scripts/measure-size.mjs && npm run build:example",
+    "build": "vite build --config vite.lib.config.ts && npm run build:types",
+    "prepack": "npm run build",
+    "size": "npm run build && node scripts/measure-size.mjs"
+  },
+  "peerDependencies": {
+    "react": ">=16.8.0"
+  },
+  "devDependencies": {
+    "@types/react": "19.2.18",
+    "@types/react-dom": "^19.2.7",
+    "happy-dom": "^20.14.3",
+    "react-dom": "^19.2.8",
+    "sucrase": "^3.35.1",
+    "typescript": "7.0.2",
+    "vite": "^8.2.2",
+    "vitest": "^5.0.0"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs",
+      "default": "./dist/index.js"
+    }
+  },
+  "keywords": [
+    "react",
+    "hypnogram",
+    "sleep",
+    "sleep-chart",
+    "sleep-stages",
+    "sleep-tracker",
+    "sleep-analysis",
+    "chart",
+    "svg",
+    "typescript",
+    "timeline"
+  ]
+}
