@@ -16,63 +16,74 @@ export const sample: HypnogramSegment[] = phases.map((stage, i) => {
 const time = { timeZone: 'Asia/Shanghai' };
 const importLine = "import { Hypnogram } from 'react-hypnogram';";
 type DemoThemeProps = { dark?: boolean };
-const optionsCode = (options: Omit<HypnogramProps, 'data'>) => `${importLine}\n\n<Hypnogram\n  data={data}\n  {...${JSON.stringify(options, null, 2)}}\n/>`;
-const sampleCode = `const data = ${JSON.stringify(sample, null, 2)};`;
+const optionsCode = (options: Omit<HypnogramProps, 'data'>) => {
+  const props = Object.entries(options).map(([name, value]) =>
+    `  ${name}={${JSON.stringify(value, null, 2).replace(/\n/g, '\n  ')}}`).join('\n');
+  return `${importLine}\n\n<Hypnogram\n  data={data}\n${props}\n/>`;
+};
 function Legend({ stages = DEFAULT_STAGES }: { stages?: readonly Stage<string>[] }) {
   return <div className="chart-legend">{stages.map(stage => <span key={stage.id}><i style={{ background: stage.color }} />{stage.label}</span>)}</div>;
-}
-export function BasicDemo({ dark = false }: DemoThemeProps) {
-  const { lang } = useI18n();
-  const t = translations[lang].basicDemo;
-  return <Demo id="basic" title={t.title} description={t.description}
-    code={`${importLine}\n\n<Hypnogram data={data} time={{ timeZone: 'Asia/Shanghai' }} />\n\n${sampleCode}`}
-    footer={<><span>22:14 — 06:28</span><span>{t.footer}</span></>}>
-    <Hypnogram data={sample} time={time} dark={dark} /><Legend />
-  </Demo>;
 }
 export function AppearanceDemo({ dark = false }: DemoThemeProps) {
   const { lang } = useI18n();
   const t = translations[lang].appearanceDemo;
-  const [radius, setRadius] = useState(12), [stageHeight, setStageHeight] = useState(40), [barThickness, setBarThickness] = useState(24), [connectorWidth, setConnectorWidth] = useState(2);
-  const [connectors, setConnectors] = useState(true), [grid, setGrid] = useState(true), [gridSolid, setGridSolid] = useState(false), [gridCenter, setGridCenter] = useState(false);
-  const [axes, setAxes] = useState(true), [xLabels, setXLabels] = useState(true), [yLabels, setYLabels] = useState(true);
-  const gridOption = !grid ? false : (gridSolid || gridCenter) ? {
-    ...(gridSolid ? { lineStyle: 'solid' as const } : {}),
-    ...(gridCenter ? { position: 'center' as const } : {}),
-  } : true;
-  const options = { time, radius, stageHeight, barThickness, connectorWidth, connectors, grid: gridOption, axes, xLabels, yLabels };
-  const previewOptions = { ...options, dark };
+  const [radius, setRadius] = useState(12), [stageHeight, setStageHeight] = useState(40);
+  const [barThickness, setBarThickness] = useState(24), [connectorWidth, setConnectorWidth] = useState(2);
+  const [gap, setGap] = useState(0), [connectors, setConnectors] = useState(true);
+  const options = { time, radius, stageHeight, barThickness, gap, connectorWidth, connectors, axes: false, grid: false };
   return <Demo id="appearance" title={t.title} description={t.description} code={optionsCode(options)} controls={<>
     <div className="range-grid">
-      <Range label={t.stageHeight} value={stageHeight} min={16} max={80} onChange={setStageHeight} />
-      <Range label={t.barThickness} value={barThickness} min={4} max={80} onChange={setBarThickness} />
+      <Range label={t.stageHeight} value={stageHeight} min={16} max={80} onChange={value => { setStageHeight(value); setBarThickness(current => Math.min(current, value)); }} />
+      <Range label={t.barThickness} value={barThickness} min={4} max={stageHeight} onChange={value => setBarThickness(Math.min(value, stageHeight))} />
       <Range label={t.radius} value={radius} min={0} max={40} onChange={setRadius} />
-      <Range label={t.connectorWidth} value={connectorWidth} min={1} max={12} onChange={setConnectorWidth} disabled={!connectors} />
+      <Range label={t.gap} value={gap} min={0} max={12} onChange={setGap} />
+      <Range label={t.connectorWidth} value={connectorWidth} min={1} max={12} onChange={setConnectorWidth} disabled={!connectors || gap > 0} />
+    </div>
+    <div className="toggle-row"><Toggle label={t.connectors} checked={connectors} onChange={setConnectors} disabled={gap > 0} /></div>
+  </>}><Hypnogram data={sample} {...options} dark={dark} /></Demo>;
+}
+export function AxesDemo({ dark = false }: DemoThemeProps) {
+  const { lang } = useI18n();
+  const t = translations[lang].axesDemo;
+  const [grid, setGrid] = useState(true), [solid, setSolid] = useState(false), [center, setCenter] = useState(false);
+  const [axes, setAxes] = useState(false), [xLabels, setXLabels] = useState(true), [yLabels, setYLabels] = useState(true);
+  const [fontSize, setFontSize] = useState(14), [xOffset, setXOffset] = useState(-10), [yOffset, setYOffset] = useState(0);
+  const [color, setColor] = useState('#7b8794');
+  const options = { time, stageHeight: 40, barThickness: 24, radius: 0,
+    axes, xLabels, yLabels,
+    grid: grid ? { lineStyle: solid ? 'solid' as const : 'dashed' as const, position: center ? 'center' as const : 'between' as const } : false as const,
+    xAxis: { labelOffset: xOffset, style: { fontSize, color } },
+    yAxis: { labelOffset: yOffset, style: { fontSize, color } },
+  };
+  return <Demo id="axes" title={t.title} description={t.description} code={optionsCode(options)} controls={<>
+    <div className="range-grid">
+      <Range label={t.fontSize} value={fontSize} min={8} max={24} onChange={setFontSize} />
+      <Range label={t.xOffset} value={xOffset} min={-40} max={30} onChange={setXOffset} />
+      <Range label={t.yOffset} value={yOffset} min={-40} max={30} onChange={setYOffset} />
     </div>
     <div className="toggle-row">
-      <Toggle label={t.connectors} checked={connectors} onChange={setConnectors} />
-      <Toggle label={t.grid} checked={grid} onChange={setGrid} />
-      <Toggle label={t.gridSolid} checked={gridSolid} onChange={setGridSolid} disabled={!grid} />
-      <Toggle label={t.gridCenter} checked={gridCenter} onChange={setGridCenter} disabled={!grid} />
       <Toggle label={t.axes} checked={axes} onChange={setAxes} />
       <Toggle label={t.xLabels} checked={xLabels} onChange={setXLabels} />
       <Toggle label={t.yLabels} checked={yLabels} onChange={setYLabels} />
+      <Toggle label={t.grid} checked={grid} onChange={setGrid} />
+      <Toggle label={t.gridSolid} checked={solid} onChange={setSolid} disabled={!grid} />
+      <Toggle label={t.gridCenter} checked={center} onChange={setCenter} disabled={!grid} />
+      <label className="color-row"><span>{t.color}</span><input type="color" aria-label={t.color} value={color} onChange={e => setColor(e.target.value)} /></label>
     </div>
-  </>}><Hypnogram data={sample} {...previewOptions} /></Demo>;
+  </>}><Hypnogram data={sample} {...options} dark={dark} /></Demo>;
 }
 export function GradientsDemo({ dark = false }: DemoThemeProps) {
   const { lang } = useI18n();
   const t = translations[lang].gradientsDemo;
   const [enabled, setEnabled] = useState(true);
   const [colors, setColors] = useState(DEFAULT_STAGES.map(stage => stage.color));
-  const [ends, setEnds] = useState(['#94BDFF', '#1D81F5', '#005CC7', '#D6E7FF']);
-  const [directions, setDirections] = useState<Array<'horizontal' | 'vertical'>>(['vertical', 'vertical', 'vertical', 'vertical']);
-  const stages: Stage[] = DEFAULT_STAGES.map((stage, i) => ({ ...stage, color: colors[i]!, ...(enabled ? { fill: { type: 'linear', direction: directions[i]!, stops: [{ offset: 0, color: colors[i]! }, { offset: 1, color: ends[i]! }] } as const } : {}) }));
-  const options = { time, stages };
+  const [ends, setEnds] = useState(['#B8D2F6', '#679BE6', '#1463D1', '#003A85']);
+  const stages: Stage[] = DEFAULT_STAGES.map((stage, i) => ({ ...stage, color: colors[i]!, ...(enabled ? { fill: { type: 'linear', stops: [{ offset: 0, color: colors[i]! }, { offset: 1, color: ends[i]! }] } as const } : {}) }));
+  const options = { time, stages, stageHeight: 48, barThickness: 32, radius: 14, axes: false, grid: false };
   return <Demo id="gradients" title={t.title} description={t.description} code={optionsCode(options)} controls={<>
     <div className="toggle-row"><Toggle label={t.gradientFill} checked={enabled} onChange={setEnabled} /></div>
-    <div className="color-grid">{stages.map((stage, i) => <div className="color-row" key={stage.id}><span>{stage.label}</span><input aria-label={`${stage.label} ${t.startColor}`} type="color" value={colors[i]} onChange={e => setColors(colors.map((c, j) => i === j ? e.target.value : c))} />{enabled && <><span className="color-arrow">→</span><input aria-label={`${stage.label} ${t.endColor}`} type="color" value={ends[i]} onChange={e => setEnds(ends.map((c, j) => i === j ? e.target.value : c))} /><select aria-label={`${stage.label} ${t.direction}`} value={directions[i]} onChange={e => setDirections(directions.map((d, j) => i === j ? e.target.value as typeof d : d))}><option value="vertical">{t.vertical}</option><option value="horizontal">{t.horizontal}</option></select></>}</div>)}</div>
-  </>}><Hypnogram data={sample} {...options} dark={dark} /><Legend stages={stages} /></Demo>;
+    <div className="color-grid">{stages.map((stage, i) => <div className="color-row" key={stage.id}><span>{stage.label}</span><input aria-label={`${stage.label} ${t.startColor}`} type="color" value={colors[i]} onChange={e => setColors(colors.map((c, j) => i === j ? e.target.value : c))} />{enabled && <><span className="color-arrow">→</span><input aria-label={`${stage.label} ${t.endColor}`} type="color" value={ends[i]} onChange={e => setEnds(ends.map((c, j) => i === j ? e.target.value : c))} /></>}</div>)}</div>
+  </>}><Hypnogram data={sample} {...options} dark={dark} /></Demo>;
 }
 const customTooltipStyle: React.CSSProperties = {
   minWidth: 80,
@@ -137,7 +148,7 @@ function compileRenderCode(codeStr: string, fallback: NonNullable<TooltipOptions
     const safeRender: NonNullable<TooltipOptions['render']> = (ctx) => {
       try {
         const result = fn(ctx);
-        return result ?? fallback(ctx);
+        return result;
       } catch {
         return fallback(ctx);
       }
@@ -190,7 +201,7 @@ export function InteractionDemo({ dark = false }: DemoThemeProps) {
         <label className="color-row"><span>{t.selectionColor}</span><input className="color-value" aria-label={t.selectionColor} type="text" value={selectionColor} disabled={!selection} onChange={e => setSelectionColor(e.target.value)} spellCheck={false} /></label>
       </div>
       {tooltip && custom && (
-        <div className="tooltip-code-editor">
+        <details className="tooltip-code-editor"><summary>{t.editContent}</summary>
           <textarea
             aria-label="Tooltip Render Code"
             value={renderCode}
@@ -199,15 +210,16 @@ export function InteractionDemo({ dark = false }: DemoThemeProps) {
             rows={16}
           />
           {compileError && <p role="alert" className="input-error" style={{ marginTop: 8 }}>{compileError}</p>}
-        </div>
+        </details>
       )}
     </>}>
     <Hypnogram data={sample} time={time} dark={dark} interaction={interaction} tooltip={tooltipProps} onSelect={s => setSelected(s?.id ?? null)} onSegmentClick={s => setClicked(s.id)} />
   </Demo>;
 }
-export function DataDemo({ dark = false }: DemoThemeProps) {
+export function BasicDemo({ dark = false }: DemoThemeProps) {
   const { lang } = useI18n();
   const t = translations[lang].dataDemo;
+  const heading = translations[lang].basicDemo;
   const [data, setData] = useState<readonly HypnogramSegment<string>[]>(sample);
   const [input, setInput] = useState(JSON.stringify(sample, null, 2)), [error, setError] = useState(''), [format, setFormat] = useState('timestamp');
   const extra = [...new Set(data.map(s => s.stage))].filter(id => !DEFAULT_STAGES.some(s => s.id === id));
@@ -217,8 +229,8 @@ export function DataDemo({ dark = false }: DemoThemeProps) {
     setFormat(value); setData(next); setInput(JSON.stringify(next, null, 2)); setError('');
   }
   const code = `${importLine}\n\nconst data = ${JSON.stringify(data, null, 2)};\nconst stages = ${JSON.stringify(stages, null, 2)};\n\n<Hypnogram data={data} stages={stages} time={{ timeZone: 'Asia/Shanghai' }} />`;
-  return <Demo id="data-lab" title={t.title} description={t.description} code={code} controls={<>
-    <details className="data-editor"><summary>{t.editData} <span>{t.intervals(data.length)}</span></summary><div className="editor-top"><label>{t.formatLabel} <select aria-label={t.formatLabel} value={format} onChange={e => changeFormat(e.target.value)}><option value="timestamp">{t.timestamp}</option><option value="iso">{t.iso}</option></select></label></div><textarea aria-label="JSON" value={input} onChange={e => setInput(e.target.value)} spellCheck={false} /><div className="editor-bottom"><span>{t.limitHint}</span><button className="primary-button" onClick={() => {
+  return <Demo id="basic" title={heading.title} description={heading.description} code={code} controls={<>
+    <details id="data-lab" className="data-editor"><summary>{t.editData} <span>{t.intervals(data.length)}</span></summary><div className="editor-top"><label>{t.formatLabel} <select aria-label={t.formatLabel} value={format} onChange={e => changeFormat(e.target.value)}><option value="timestamp">{t.timestamp}</option><option value="iso">{t.iso}</option></select></label></div><textarea aria-label="JSON" value={input} onChange={e => setInput(e.target.value)} spellCheck={false} /><div className="editor-bottom"><span>{t.limitHint}</span><button className="primary-button" onClick={() => {
       try {
         const value: unknown = JSON.parse(input);
         if (!Array.isArray(value) || value.length > 200) throw new Error(t.errorMax);
@@ -226,7 +238,7 @@ export function DataDemo({ dark = false }: DemoThemeProps) {
         normalizeTimeline(value, time); setData(value); setError('');
       } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     }}>{t.apply}</button></div>{error && <p role="alert" className="input-error">{error}</p>}</details>
-  </>}><Hypnogram data={data} stages={stages} time={time} dark={dark} /></Demo>;
+  </>}><Hypnogram data={data} stages={stages} time={time} dark={dark} /><Legend stages={stages} /></Demo>;
 }
 export function Usage() {
   return <div className="quickstart"><CodeBlock code={`${importLine}\n\n<Hypnogram data={data} time={{ timeZone: 'Asia/Shanghai' }} />`} /></div>;

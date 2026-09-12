@@ -213,8 +213,6 @@ td code { font-size: 11px; overflow-wrap: anywhere; }
 .prop-type code { padding: 0; color: inherit; background: none; font-size: 10px; }
 .prop-usage { margin-top: 9px; }
 .prop-usage code { padding: 0; color: var(--code-text); background: none; font-size: 10px; }
-.reference-notes { margin: 20px 0 35px; color: var(--subtle); font-size: 12px; }
-.reference-notes p { margin-bottom: 8px; }
 .type-reference { overflow: hidden; margin-top: 11px; border: 1px solid var(--line); border-radius: 7px; }
 .type-reference > summary { padding: 16px 18px; background: var(--surface); font-size: 12px; }
 .type-reference > summary code { padding: 0; color: var(--input-text); background: transparent; font-size: 12px; }
@@ -283,3 +281,6 @@ td code { font-size: 11px; overflow-wrap: anywhere; }
   html { scroll-behavior: auto; }
   * { transition: none !important; }
 }
+
+.tooltip-code-editor > summary { cursor: pointer; font-size: 12px; font-weight: 500; }
+.tooltip-code-editor[open] > summary { margin-bottom: 12px; }

@@ -1,4 +1,4 @@
-import { expect, it } from 'vitest';
+import { expect, it, vi } from 'vitest';
 import { buildLayout } from '../src/internal/layout';
 import type { HypnogramProps } from '../src/types';
 const data: HypnogramProps['data'] = [
@@ -11,15 +11,15 @@ it('retains original intervals and input indices while sorting', () => {
   expect(chart.bars[0]!.duration).toBe(1000);
   expect(chart.bars[0]!.index).toBe(1);
 });
-it('expands rows for large bars and clamps negative spacing to prevent overlap', () => {
-  const chart = buildLayout({ data, barHeight: 80, rowGap: -100 }, 500);
+it('clamps bar thickness to the explicit stage height to prevent overlap', () => {
+  const chart = buildLayout({ data, stageHeight: 80, barThickness: 100 }, 500);
   expect(chart.bars[0]!.rect.height).toBe(80);
   expect(chart.bars[0]!.rect.y + chart.bars[0]!.rect.height).toBeLessThanOrEqual(chart.bars[1]!.rect.y);
 });
 it('requires stage mappings and rejects invalid geometry', () => {
   expect(() => buildLayout({ data: [{ id: 'x', stage: 'N1', start: 0, end: 1 }] }, 500)).toThrow('Unknown stage');
   expect(() => buildLayout({ data, stages: [{ id: 'light', label: '', color: '#fff' }, { id: 'light', label: '', color: '#fff' }] }, 500)).toThrow('Duplicate');
-  expect(() => buildLayout({ data, barHeight: NaN }, 500)).toThrow('barHeight');
+  expect(() => buildLayout({ data, barThickness: NaN }, 500)).toThrow('barThickness');
 });
 it('drops label gutters when labels are hidden', () => {
   const full = buildLayout({ data }, 720);
@@ -41,23 +41,13 @@ it('connects 1s discrete timestamps by default and allows disabling via maxGap',
     { id: '1', stage: 'light', start: 1788632885000, end: 1788634166000 },
     { id: '2', stage: 'deep', start: 1788634167000, end: 1788634567000 },
   ];
-  expect(buildLayout({ data: discrete }, 500).connectors).toHaveLength(1);
-  expect(buildLayout({ data: discrete, connectors: { maxGap: 0 } }, 500).connectors).toHaveLength(0);
-});
-it('computes connector gradient layouts between contiguous different stages', () => {
-  const chart = buildLayout({ data }, 500);
-  expect(chart.connectors).toHaveLength(1);
-  const connector = chart.connectors[0]!;
-  expect(connector.stops.length).toBeGreaterThanOrEqual(2);
-  expect(connector.stops[0]!.color).toBe('#1D81F5');
-  expect(connector.stops.at(-1)!.color).toBe('#005CC7');
+  expect(buildLayout({ data: discrete }, 500).outline.match(/M /g)).toHaveLength(1);
+  expect(buildLayout({ data: discrete, connectors: { maxGap: 0 } }, 500).outline.match(/M /g)).toHaveLength(2);
 });
 it('keeps connectors with compact H5 geometry and hidden axes', () => {
-  const chart = buildLayout({ data, radius: 0, barHeight: 24, rowGap: -20,
+  const chart = buildLayout({ data, radius: 0, stageHeight: 24, barThickness: 24,
     connectorWidth: 2, grid: false, axes: false, yLabels: false, connectors: true }, 360);
-  expect(chart.connectors).toHaveLength(1);
   expect(chart.outline.match(/M /g)).toHaveLength(1);
-  expect(chart.connectors[0]!.rect.width).toBe(2);
 });
 it('supports stageHeight and barThickness for custom spacing and seamless fit', () => {
   const spaced = buildLayout({ data, stageHeight: 40, barThickness: 24 }, 500);
@@ -86,11 +76,35 @@ it('moves labels inward and outward without changing data geometry', () => {
   expect(outward.totalHeight).toBe(initial.totalHeight + 50);
   expect(() => buildLayout({ data, yAxis: { labelOffset: Infinity } }, 500)).toThrow('labelOffset');
 });
-it('bounds the blended connector paint to half of each adjoining bar', () => {
-  const chart = buildLayout({ data: [...data, { id: 'c', stage: 'light', start: 2000, end: 1e6 }], radius: 40 }, 500);
-  for (const connector of chart.connectors) {
-    expect(connector.rect.width).toBeLessThanOrEqual(Math.min(...chart.bars.slice(connector.index, connector.index + 2).map(b => b.rect.width)) + 1e-7);
-    expect(connector.feather).toBeGreaterThanOrEqual(0);
-    expect(connector.feather).toBeLessThan(0.5);
-  }
+it('supports plot margins and skips only the requested adjacent-stage connections', () => {
+  const chart = buildLayout({ data, stageHeight: 24, barThickness: 24,
+    xLabels: false, yLabels: false, plotPadding: { top: 0, right: 0, bottom: 0, left: 0 },
+    connectors: { minStageDistance: 2 } }, 360);
+  expect(chart.plot).toEqual({ x: 0, y: 0, width: 360, height: 96 });
+  expect(chart.totalHeight).toBe(96);
+  expect(chart.outline.match(/M /g)).toHaveLength(2);
+  const jump = buildLayout({ data: [data[0]!, { ...data[1]!, stage: 'awake' }],
+    connectors: { minStageDistance: 2 } }, 360);
+  expect(jump.outline.match(/M /g)).toHaveLength(1);
+});
+it('uses the effective x-axis font size for tick collision avoidance', () => {
+  const data = [{ id: 'a', stage: 'light', start: 1738598400000, end: 1738628040000 }];
+  const original = buildLayout({ data }, 400);
+  const styled = buildLayout({ data, xAxis: { style: { fontSize: 40 } } }, 400);
+  const alias = buildLayout({ data, xAxis: { labelStyle: { fontSize: 40 } } }, 400);
+  expect(styled.ticks).toEqual(alias.ticks);
+  expect(styled.ticks.length).toBeLessThan(original.ticks.length);
+  expect(buildLayout({ data, xAxis: { labelStyle: { fontSize: 40 }, style: { fontSize: 12 } } }, 400).ticks)
+    .toEqual(original.ticks);
+});
+it('reuses date formatters across segment labels within one layout', () => {
+  const spy = vi.spyOn(Intl, 'DateTimeFormat');
+  try {
+    const data = Array.from({ length: 200 }, (_, i) => ({ id: String(i), stage: 'light',
+      start: 1738598400000 + i * 60000, end: 1738598400000 + (i + 1) * 60000 }));
+    const chart = buildLayout({ data, connectors: false }, 500);
+    expect(chart.bars[0]!.startLabel).toBe('00:00');
+    expect(chart.bars.at(-1)!.endLabel).toBe('03:20');
+    expect(spy.mock.calls.length).toBeLessThan(10);
+  } finally { spy.mockRestore(); }
 });

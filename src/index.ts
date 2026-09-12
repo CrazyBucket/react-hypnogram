@@ -2,7 +2,7 @@ export { Hypnogram } from './Hypnogram';
 export { DEFAULT_STAGES } from './internal/layout';
 export type {
   DefaultStage, TimeValue, TimeOptions, TimeFormatContext, HypnogramSegment,
-  GradientStop, Paint, Stage, Rect, TooltipContext, TooltipOptions, HighlightStyle,
+  GradientStop, Paint, Stage, Rect, ActiveContext, TooltipContext, TooltipOptions, HighlightStyle,
   InteractionOptions, XAxisOptions, AxisLabelOptions, ConnectorOptions, GridOptions, HypnogramBaseProps, HypnogramProps,
 } from './types';
 export { normalizeTimeline, buildTimelineTicks, formatTimelineValue } from './time';

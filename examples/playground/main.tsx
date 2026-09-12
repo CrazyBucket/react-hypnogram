@@ -1,13 +1,13 @@
 import { StrictMode, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { AppearanceDemo, BasicDemo, DataDemo, GradientsDemo, InteractionDemo, Usage } from './demos';
+import { AppearanceDemo, BasicDemo, AxesDemo, GradientsDemo, InteractionDemo, Usage } from './demos';
 import { I18nProvider, translations, useI18n } from './i18n';
 import { ApiReference } from './reference';
 import size from './size.json';
 import logo from './logo.png';
 import './style.css';
 
-const sectionIds = ['overview', 'basic', 'appearance', 'gradients', 'interaction', 'data-lab', 'size', 'api'] as const;
+const sectionIds = ['overview', 'basic', 'appearance', 'gradients', 'axes', 'interaction', 'size', 'api'] as const;
 const githubUrl = 'https://github.com/CrazyBucket/react-hypnogram';
 const kb = (bytes: number) => new Intl.NumberFormat('en', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(bytes / 1000);
 
@@ -85,8 +85,8 @@ function App() {
         <BasicDemo dark={dark} />
         <AppearanceDemo dark={dark} />
         <GradientsDemo dark={dark} />
+        <AxesDemo dark={dark} />
         <InteractionDemo dark={dark} />
-        <DataDemo dark={dark} />
         <SizeSection />
         <ApiReference />
         <footer className="site-footer"><span>react-hypnogram · MIT</span><a href="#overview">{t.backToTop}</a></footer>

@@ -21,7 +21,7 @@ async function render(props: HypnogramProps) {
 async function click(id: string) {
   await act(async () => host.querySelector(`[data-segment="${id}"]`)!.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1 })));
 }
-afterEach(async () => { await act(async () => root?.unmount()); root = undefined; document.body.innerHTML = ''; vi.restoreAllMocks(); });
+afterEach(async () => { await act(async () => root?.unmount()); root = undefined; document.body.innerHTML = ''; vi.restoreAllMocks(); vi.useRealTimers(); });
 
 describe('public component', () => {
   it('applies independent axis text styling even with axis lines hidden', async () => {
@@ -49,16 +49,11 @@ describe('public component', () => {
     expect(yLabel.style.fill).toBe('#FF5500');
     expect(yLabel.style.fontWeight).toBe('bold');
   });
-  it('feathers connector paint into solid bars instead of cutting it at rectangle edges', async () => {
-    await render({ data, radius: 14, rowGap: -18 });
-    const connector = host.querySelector('[data-connector-paint]')!;
-    const maskId = connector.getAttribute('mask')!.slice(5, -1);
-    const mask = host.querySelector(`mask[id="${maskId}"]`)!;
-    expect(mask).not.toBeNull();
-    const fadeId = mask.querySelector('rect')!.getAttribute('fill')!.slice(5, -1);
-    const stops = host.querySelectorAll(`linearGradient[id="${fadeId}"] stop`);
-    expect(stops[0]!.getAttribute('stop-opacity')).toBe('0');
-    expect(stops[stops.length - 1]!.getAttribute('stop-opacity')).toBe('0');
+  it('uses one shared Y palette without connector overlays at large radii', async () => {
+    await render({ data, radius: 14, stageHeight: 26 });
+    expect(host.querySelectorAll('linearGradient')).toHaveLength(1);
+    expect(host.querySelector('mask, [data-connector-paint]')).toBeNull();
+    expect(host.querySelector('[data-stage-paint]')?.getAttribute('fill')).toMatch(/-palette/);
   });
   it('renders without window-dependent work during SSR and uses instance-unique gradient IDs', () => {
     const stages = DEFAULT_STAGES.map(s => ({ ...s, fill: { type: 'linear' as const, stops: [{ offset: 0, color: s.color }, { offset: 1, color: '#fff' }] } }));
@@ -95,9 +90,8 @@ describe('public component', () => {
     expect(host.querySelector('[role="tooltip"]')).toBeNull();
   });
   it('keeps four solid row paints when gradients are absent, including touching full-height bars', async () => {
-    await render({ data, rowGap: 0, barHeight: 44, radius: 5, connectors: false });
-    expect([...host.querySelectorAll('[data-stage-paint]')].map(node => node.getAttribute('fill'))).toEqual(DEFAULT_STAGES.map(s => s.color));
-    expect(host.querySelector('linearGradient')).toBeNull();
+    await render({ data, stageHeight: 44, barThickness: 44, radius: 5, connectors: false });
+    expect([...new Set([...host.querySelectorAll('stop')].map(node => node.getAttribute('stop-color')))]).toEqual(DEFAULT_STAGES.map(s => s.color));
     expect(host.innerHTML).not.toMatch(/NaN|Infinity/);
   });
   it('handles empty data and hidden axes without a default background', async () => {
@@ -137,32 +131,6 @@ describe('public component', () => {
     expect(yAxisLine).not.toBeNull();
     expect(outline!.compareDocumentPosition(yAxisLine!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
-  it('renders connector gradients between contiguous stages', async () => {
-    await render({ data });
-    const connectorRect = host.querySelector('[data-connector-paint]');
-    expect(connectorRect).not.toBeNull();
-    const fill = connectorRect!.getAttribute('fill');
-    expect(fill).toMatch(/^url\(#hypnogram-.*-connector-0\)$/);
-    const gradId = fill!.replace(/^url\(#|\)$/g, '');
-    const gradient = host.querySelector(`linearGradient#${gradId}`);
-    expect(gradient).not.toBeNull();
-    const stops = gradient!.querySelectorAll('stop');
-    expect(stops.length).toBeGreaterThanOrEqual(2);
-    expect(stops[0]!.getAttribute('stop-color')).toBe(DEFAULT_STAGES[2]!.color);
-    expect(stops[stops.length - 1]!.getAttribute('stop-color')).toBe(DEFAULT_STAGES[3]!.color);
-  });
-  it('supports ConnectorOptions object and custom maxGap tolerance', async () => {
-    const discrete = [
-      { id: '1', stage: 'light' as const, start: 0, end: 1000 },
-      { id: '2', stage: 'deep' as const, start: 2000, end: 3000 },
-    ];
-    await render({ data: discrete, connectors: { maxGap: 0 } });
-    expect(host.querySelector('[data-connector-paint]')).toBeNull();
-    await render({ data: discrete, radius: 0, connectors: { maxGap: 1500, width: 4 } });
-    const connectorRect = host.querySelector('[data-connector-paint]');
-    expect(connectorRect).not.toBeNull();
-    expect(connectorRect?.getAttribute('width')).toBe('4');
-  });
   it('renders with stageHeight and barThickness props', async () => {
     await render({ data, stageHeight: 32, barThickness: 20 });
     const outline = host.querySelector('path[d]');
@@ -187,4 +155,143 @@ describe('public component', () => {
     const edgeLines = host.querySelectorAll('[data-grid-line="between"]');
     expect(edgeLines).toHaveLength(DEFAULT_STAGES.length + 1);
   });
+});
+
+// Touch events keep their original DOM target during a drag: selection must use coordinates.
+it('scrubs across intervals on touch and hides custom content after release', async () => {
+  vi.useFakeTimers();
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
+    x: 0, y: 0, left: 0, top: 0, right: 400, bottom: 96, width: 400, height: 96, toJSON() {},
+  });
+  const onClick = vi.fn();
+  await render({ data, width: 400, stageHeight: 24, barThickness: 24, xLabels: false, yLabels: false,
+    plotPadding: { top: 0, right: 0, bottom: 0, left: 0 },
+    tooltip: { persistOnSelect: false, hideDelay: 1000, render: c => c.segment.id }, onSegmentClick: onClick });
+  const target = host.querySelector('[data-segment="a"]')!;
+  const pointer = async (type: string, x: number) => act(async () => {
+    target.dispatchEvent(new PointerEvent(type, { bubbles: true, pointerId: 1, isPrimary: true,
+      pointerType: 'touch', button: 0, clientX: x, clientY: 65 }));
+  });
+  await pointer('pointerdown', 100);
+  expect(host.querySelector('[role="tooltip"]')?.textContent).toBe('a');
+  await pointer('pointermove', 300);
+  expect(host.querySelector('[role="tooltip"]')?.textContent).toBe('b');
+  await pointer('pointerup', 300);
+  expect(onClick).not.toHaveBeenCalled();
+  await act(async () => vi.advanceTimersByTime(999));
+  expect(host.querySelector('[role="tooltip"]')).not.toBeNull();
+  await act(async () => vi.advanceTimersByTime(1));
+  expect(host.querySelector('[role="tooltip"]')).toBeNull();
+});
+it('reports original metadata and root-relative bar bounds to external tooltips', async () => {
+  const onActiveChange = vi.fn();
+  const metadata = { note: 'original' };
+  const annotated = data.map(s => ({ ...s, metadata }));
+  await render({ data: annotated, width: 400, tooltip: false, onActiveChange, stageHeight: 24, barThickness: 24,
+    xLabels: false, yLabels: false, plotPadding: { top: 0, right: 0, bottom: 0, left: 0 } });
+  await click('a');
+  const context = onActiveChange.mock.calls.at(-1)![0];
+  expect(context.segment).toBe(annotated[0]);
+  expect(context.segment.metadata).toBe(metadata);
+  expect(context.anchor).toEqual({ x: 0, y: 48, width: 200, height: 24 });
+  expect(host.querySelector('[role="tooltip"]')).toBeNull();
+  await click('a');
+  expect(onActiveChange).toHaveBeenLastCalledWith(null);
+});
+it('measures custom tooltip dimensions and positions inside a surrounding card', async () => {
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (this: HTMLElement) {
+    return this.getAttribute('role') === 'tooltip' ? 230 : 400;
+  });
+  vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (this: HTMLElement) {
+    return this.getAttribute('role') === 'tooltip' ? 90 : 96;
+  });
+  vi.spyOn(Element.prototype, 'getBoundingClientRect').mockReturnValue({
+    x: 0, y: 0, left: 0, top: 0, right: 400, bottom: 96, width: 400, height: 96, toJSON() {},
+  });
+  const card = document.createElement('div');
+  card.getBoundingClientRect = () => ({ x: 0, y: -100, left: 0, top: -100, right: 400,
+    bottom: 200, width: 400, height: 300, toJSON() {} });
+  await render({ data, width: 400, stageHeight: 24, barThickness: 24, xLabels: false, yLabels: false,
+    plotPadding: { top: 0, right: 0, bottom: 0, left: 0 },
+    tooltip: { boundary: () => card, offset: 10, render: c => `${c.placement}/${c.arrowOffset}` } });
+  await click('b');
+  const element = host.querySelector<HTMLElement>('[role="tooltip"]')!;
+  expect(element.style.left).toBe('162px');
+  expect(element.style.top).toBe('-28px');
+  expect(element.style.visibility).toBe('visible');
+  expect(element.textContent).toBe('top/138');
+  expect(element.style.getPropertyValue('--hypnogram-arrow-x')).toBe('138px');
+});
+it('keeps selection state but dismisses transient click tooltips on schedule', async () => {
+  vi.useFakeTimers();
+  await render({ data, tooltip: { persistOnSelect: false, hideDelay: 1000 } });
+  await click('a');
+  expect(host.querySelector('[role="tooltip"]')).not.toBeNull();
+  await act(async () => vi.advanceTimersByTime(1000));
+  expect(host.querySelector('[role="tooltip"]')).toBeNull();
+  expect(host.querySelector('[data-segment="a"]')?.getAttribute('aria-pressed')).toBe('true');
+});
+it('clears a mouse drag released outside and resumes normal hover dismissal', async () => {
+  await render({ data, width: 400 });
+  const svg = host.querySelector('svg')!;
+  svg.getBoundingClientRect = () => ({ left: 0, top: 0, right: 400, bottom: 310, width: 400, height: 310, x: 0, y: 0, toJSON() {} });
+  const pointer = async (target: Element, type: string) => act(async () => target.dispatchEvent(new PointerEvent(type, {
+    bubbles: true, pointerId: 1, pointerType: 'mouse', isPrimary: true, button: 0, clientX: 150, clientY: 100,
+    relatedTarget: document.body,
+  })));
+  await pointer(svg, 'pointerdown');
+  await pointer(svg, 'pointermove');
+  expect(host.querySelector('[role="tooltip"]')).not.toBeNull();
+  await pointer(document.body, 'pointerup');
+  expect(host.querySelector('[role="tooltip"]')).toBeNull();
+  await pointer(svg, 'pointermove');
+  expect(host.querySelector('[role="tooltip"]')).not.toBeNull();
+  await pointer(svg, 'pointerout');
+  expect(host.querySelector('[role="tooltip"]')).toBeNull();
+});
+it('does not dismiss a touch tooltip on the compatibility click targeting its capturing SVG', async () => {
+  await render({ data, width: 400, tooltip: { persistOnSelect: false, hideDelay: 1000 } });
+  const svg = host.querySelector('svg')!;
+  svg.getBoundingClientRect = () => ({ left: 0, top: 0, right: 400, bottom: 310, width: 400, height: 310, x: 0, y: 0, toJSON() {} });
+  for (const type of ['pointerdown', 'pointerup']) await act(async () => svg.dispatchEvent(new PointerEvent(type, {
+    bubbles: true, pointerId: 1, pointerType: 'touch', isPrimary: true, button: 0, clientX: 150, clientY: 100,
+  })));
+  await act(async () => svg.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  expect(host.querySelector('[role="tooltip"]')).not.toBeNull();
+  await act(async () => svg.dispatchEvent(new MouseEvent('click', { bubbles: true })));
+  expect(host.querySelector('[role="tooltip"]')).toBeNull();
+});
+it('retains the tooltip size observer when custom content changes', async () => {
+  const NativeObserver = globalThis.ResizeObserver;
+  let instances = 0;
+  const observers: Array<{ target?: Element; resize: () => void }> = [];
+  class Observer {
+    record: { target?: Element; resize: () => void };
+    constructor(callback: () => void) { instances++; this.record = { resize: callback }; observers.push(this.record); }
+    observe(target: Element) { this.record.target = target; }
+    disconnect() {}
+    unobserve() {}
+  }
+  globalThis.ResizeObserver = Observer as unknown as typeof ResizeObserver;
+  let tooltipWidth = 120;
+  vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(function (this: HTMLElement) {
+    return this.getAttribute('role') === 'tooltip' ? tooltipWidth : 400;
+  });
+  try {
+    const content = (context: { segment: { id: string } }) => <b>{context.segment.id}</b>;
+    await render({ data, width: 400, tooltip: { render: content } });
+    await click('a');
+    const count = instances;
+    await click('b');
+    expect(instances).toBe(count);
+    tooltipWidth = 200;
+    const observer = observers.find(o => o.target?.getAttribute('role') === 'tooltip')!;
+    expect(observer).toBeDefined();
+    await act(async () => observer.resize());
+    expect(instances).toBe(count);
+    expect(host.querySelector('[role="tooltip"]')?.textContent).toBe('b');
+  } finally {
+    await act(async () => root?.unmount()); root = undefined;
+    globalThis.ResizeObserver = NativeObserver;
+  }
 });

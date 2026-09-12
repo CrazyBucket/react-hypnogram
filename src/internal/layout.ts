@@ -1,15 +1,8 @@
-import { buildTimelineTicks, formatTimelineValue, normalizeTimeline } from '../time';
+import { normalizeTimeline } from '../time';
+import { createTimeFormatter } from './time-format';
+import { buildDefaultTicks } from './ticks';
 import type { DefaultStage, HypnogramBaseProps, Rect, Stage } from '../types';
 import { connectBars, roundedBarsPath, roundedUnionPath } from './geometry';
-
-export interface ConnectorLayout {
-  index: number;
-  rect: Rect;
-  y1: number;
-  y2: number;
-  stops: { offset: number; color: string }[];
-  feather: number;
-}
 
 export const DEFAULT_STAGES: readonly Stage<DefaultStage>[] = Object.freeze([
   { id: 'awake', label: 'Awake', color: '#D6E7FF' },
@@ -46,27 +39,18 @@ export function buildLayout<S extends string, M>(props: HypnogramBaseProps<S, M>
     rowIndex.set(stage.id, i);
   });
   const timeline = normalizeTimeline(props.data, props.time);
-  const rawThickness = props.barThickness ?? props.barHeight;
-  const thicknessName = props.barThickness !== undefined ? 'barThickness' : 'barHeight';
   const radius = dimension(props.radius ?? 12, 'radius');
-  if (props.rowGap !== undefined && !Number.isFinite(props.rowGap)) throw new Error('rowGap must be finite.');
-  const stageHeight = props.stageHeight !== undefined
-    ? dimension(props.stageHeight, 'stageHeight', 1)
-    : Math.max(
-        rawThickness !== undefined ? dimension(rawThickness, thicknessName) : 26,
-        Math.max(44, rawThickness !== undefined ? dimension(rawThickness, thicknessName) : 26) + (props.rowGap ?? 12),
-      );
-  const thickness = rawThickness !== undefined
-    ? Math.min(stageHeight, dimension(rawThickness, thicknessName))
-    : Math.min(stageHeight, 26);
+  const stageHeight = dimension(props.stageHeight ?? 56, 'stageHeight', 1);
+  const thickness = Math.min(stageHeight, dimension(props.barThickness ?? 26, 'barThickness'));
   const xLabelOffset = props.xAxis?.labelOffset ?? 0;
   const yLabelOffset = props.yAxis?.labelOffset ?? 0;
   if (!Number.isFinite(xLabelOffset) || !Number.isFinite(yLabelOffset)) throw new Error('Axis labelOffset must be finite.');
   const xFontSize = labelFontSize(props.xAxis?.style?.fontSize ?? props.xAxis?.labelStyle?.fontSize);
   const yFontSize = labelFontSize(props.yAxis?.style?.fontSize ?? props.yAxis?.labelStyle?.fontSize);
-  const padX = props.yLabels === false ? 0 : width < 500 ? 55 : 72;
-  const padRight = width < 500 ? 16 : 24;
-  const plot: Rect = { x: padX, y: 32, width: Math.max(1, width - padX - padRight), height: stages.length * stageHeight };
+  const padX = dimension(props.plotPadding?.left ?? (props.yLabels === false ? 0 : width < 500 ? 55 : 72), 'plotPadding.left');
+  const padRight = dimension(props.plotPadding?.right ?? (width < 500 ? 16 : 24), 'plotPadding.right');
+  const padTop = dimension(props.plotPadding?.top ?? 32, 'plotPadding.top');
+  const plot: Rect = { x: padX, y: padTop, width: Math.max(1, width - padX - padRight), height: stages.length * stageHeight };
   const labelStep = Math.max(stageHeight, yFontSize + 4);
   const firstLabelY = plot.y + plot.height / 2 - Math.max(0, stages.length - 1) * labelStep / 2;
   const labelShift = Math.max(0, 12 - firstLabelY);
@@ -78,6 +62,7 @@ export function buildLayout<S extends string, M>(props: HypnogramBaseProps<S, M>
     return { stage, cy, labelY, rect: { x: plot.x, y, width: plot.width, height: stageHeight } };
   });
   const barGap = props.gap !== undefined ? dimension(props.gap, 'gap') : 0;
+  const formatTime = createTimeFormatter(timeline);
   const bars = timeline.intervals.map(item => {
     const row = rowIndex.get(item.segment.stage);
     if (row === undefined) throw new Error(`Unknown stage: ${item.segment.stage}. Supply a stages mapping.`);
@@ -87,16 +72,17 @@ export function buildLayout<S extends string, M>(props: HypnogramBaseProps<S, M>
     return { ...item, row, stage,
       rect: { x: x(item.start) + gap / 2, y: rows[row]!.cy - thickness / 2, width: Math.max(0, fullWidth - gap), height: thickness },
       interval: { x: x(item.start), y: plot.y, width: fullWidth, height: plot.height },
-      startLabel: formatTimelineValue(item.start, timeline), endLabel: formatTimelineValue(item.end, timeline), durationLabel: formatDuration(item.duration) };
+      startLabel: formatTime(item.start), endLabel: formatTime(item.end), durationLabel: formatDuration(item.duration) };
   });
   const connectorConfig = typeof props.connectors === 'object' ? props.connectors : undefined;
   const connectorsEnabled = typeof props.connectors === 'boolean' ? props.connectors : (connectorConfig?.enabled ?? true);
   const maxGap = connectorConfig?.maxGap !== undefined ? dimension(connectorConfig.maxGap, 'connectors.maxGap') : 2000;
   const connectorWidth = dimension(connectorConfig?.width ?? props.connectorWidth ?? 2, 'connectorWidth');
+  const minStageDistance = dimension(connectorConfig?.minStageDistance ?? 1, 'connectors.minStageDistance', 1);
   const pairs: [number, number][] = [];
   if (connectorsEnabled && barGap === 0) bars.forEach((bar, i) => {
     const next = bars[i + 1];
-    if (next && bar.row !== next.row) {
+    if (next && Math.abs(bar.row - next.row) >= minStageDistance) {
       const g = next.start - bar.end;
       const isContiguous = maxGap > 0 ? (g >= 0 && g <= maxGap) : (g === 0);
       if (isContiguous) pairs.push([i, i + 1]);
@@ -105,45 +91,12 @@ export function buildLayout<S extends string, M>(props: HypnogramBaseProps<S, M>
   const rects = bars.map(bar => bar.rect);
   const outline = pairs.length ? roundedUnionPath(connectBars(rects, pairs, connectorWidth), radius)
     : roundedBarsPath(rects, radius);
-  const connectors: ConnectorLayout[] = pairs.flatMap(([from, to], index) => {
-    const a = bars[from]!, b = bars[to]!;
-    if (typeof a.stage.fill === 'object' || typeof b.stage.fill === 'object') return [];
-    const half = Math.min(connectorWidth / 2, a.rect.width / 2, b.rect.width / 2);
-    if (half <= 0) return [];
-    const ext = Math.max(0, Math.min(radius, a.rect.width / 2 - half, b.rect.width / 2 - half));
-    const joinX = (a.rect.x + a.rect.width + b.rect.x) / 2;
-    const isADown = a.rect.y > b.rect.y;
-    const topBar = isADown ? b : a;
-    const bottomBar = isADown ? a : b;
-    const topColor = typeof topBar.stage.fill === 'string' ? topBar.stage.fill : topBar.stage.color;
-    const bottomColor = typeof bottomBar.stage.fill === 'string' ? bottomBar.stage.fill : bottomBar.stage.color;
-    const y1 = topBar.rect.y;
-    const y2 = bottomBar.rect.y + bottomBar.rect.height;
-    const total = y2 - y1;
-    const topBottom = topBar.rect.y + topBar.rect.height;
-    const bottomTop = bottomBar.rect.y;
-    const rect: Rect = {
-      x: joinX - half - ext,
-      y: y1,
-      width: (half + ext) * 2,
-      height: total,
-    };
-    const stops = total > 0 && bottomTop > topBottom ? [
-      { offset: 0, color: topColor },
-      { offset: Math.max(0, Math.min(1, (topBottom - y1) / total)), color: topColor },
-      { offset: Math.max(0, Math.min(1, (bottomTop - y1) / total)), color: bottomColor },
-      { offset: 1, color: bottomColor },
-    ] : [
-      { offset: 0, color: topColor },
-      { offset: 1, color: bottomColor },
-    ];
-    return [{ index, rect, y1, y2, stops, feather: ext / rect.width }];
-  });
   const labelBottom = props.yLabels !== false && rows.length ? rows.at(-1)!.labelY + yFontSize / 2 + 2.5 : 0;
   const xLabelY = plot.y + plot.height + 29 + xLabelOffset;
   const yLabelX = plot.x - 14 - yLabelOffset;
-  const bottom = props.xLabels === false ? 16 : Math.max(16, 54 + xLabelOffset + Math.max(0, xFontSize - 11));
-  return { bars, rows, plot, timeline, x, outline, connectors, xLabelY, yLabelX,
-    ticks: buildTimelineTicks(timeline, plot.width, { labelStyle: { fontSize: props.xAxis?.labelStyle?.fontSize === undefined ? 12 : xFontSize } }),
+  const bottom = dimension(props.plotPadding?.bottom ?? (props.xLabels === false ? 16 : Math.max(16, 54 + xLabelOffset + Math.max(0, xFontSize - 11))), 'plotPadding.bottom');
+  return { bars, rows, plot, timeline, x, outline, thickness, xLabelY, yLabelX,
+    ticks: props.xLabels === false ? [] : buildDefaultTicks(timeline, plot.width,
+      props.xAxis?.style?.fontSize === undefined && props.xAxis?.labelStyle?.fontSize === undefined ? 12 : xFontSize),
     totalHeight: Math.max(plot.y + plot.height, labelBottom) + bottom };
 }

@@ -7,11 +7,9 @@ Customizable, lightweight SVG sleep-stage charts (Hypnograms) for React and Type
 
 ![react-hypnogram preview](docs/assets/react-hypnogram-preview.jpg)
 
-- **Pure SVG Rendering**: Crisp on high-DPI screens, responsive, zero heavy charting dependencies.
-- **Smooth Geometry**: Automatic rounded corners and seamless gradient transitions between sleep stages.
-- **Customizable Stages**: Flexible stage definitions, colors, and linear gradient fills (Awake, REM, Light, Deep or custom).
-- **Interactive**: Built-in hover/selection highlights and custom tooltip rendering.
-- **TypeScript First**: Full type safety for interval data, stages, and options.
+- SVG rendering with configurable stages, spacing, rounded corners, and vertical gradient fills.
+- Custom tooltip content, positioning, highlights, and callbacks.
+- React and TypeScript; no runtime dependency beyond React.
 
 ## Installation
 
@@ -38,8 +36,8 @@ export function App() {
       data={data}
       time={{ timeZone: 'Asia/Shanghai' }}
       radius={12}
-      barHeight={26}
-      rowGap={12}
+      stageHeight={40}
+      barThickness={24}
       onSegmentClick={segment => console.log('Clicked segment:', segment.id)}
     />
   );
@@ -61,7 +59,7 @@ npm run dev
 npm test
 npm run typecheck
 
-# Full CI verification (tests, lint, build, size)
+# Full verification (types, tests, package, size, playground)
 npm run check
 ```
 

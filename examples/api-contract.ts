@@ -8,7 +8,7 @@ const data = [
 export const minimal = { data } satisfies HypnogramProps;
 export const customized = {
   data, time: { timeZone: 'Asia/Shanghai' },
-  radius: 8, barHeight: 32, rowGap: 4, connectorWidth: 3,
+  radius: 8, stageHeight: 48, barThickness: 32, connectorWidth: 3,
   interaction: { hoverStyle: { fill: '#1D81F5', opacity: 0.22 }, selectionStyle: { stroke: '#1D81F5', strokeWidth: 1 } },
   tooltip: { render: ({ stage, durationLabel }) => `${stage.label} · ${durationLabel}`, style: { borderRadius: 4 } },
   onSelect: segment => console.log(segment?.id),
@@ -45,3 +45,8 @@ export const unknownStage: HypnogramSegment = { id: 'x', stage: 'n2', start: 0, 
 export const keyboardOption: HypnogramProps = { data, interaction: { keyboard: true } };
 // @ts-expect-error the unimplemented selection API from the old draft is not public.
 export const controlledSelection: HypnogramProps = { data, selection: { value: 'a' } };
+
+// @ts-expect-error removed aliases must not re-enter the public API.
+export const removedBarHeight: HypnogramProps = { data, barHeight: 24 };
+// @ts-expect-error use stageHeight and barThickness to control vertical spacing.
+export const removedRowGap: HypnogramProps = { data, rowGap: 0 };

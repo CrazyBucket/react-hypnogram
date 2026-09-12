@@ -31,8 +31,8 @@ export interface GradientStop {
 }
 export type Paint = string | {
   type: 'linear';
-  direction?: 'horizontal' | 'vertical';
-  /** At least two stops. Coordinates span the entire stage row. */
+  direction?: 'vertical';
+  /** At least two stops. Coordinates span the stage's bar thickness. */
   stops: readonly GradientStop[];
 };
 export interface Stage<S extends string = DefaultStage> {
@@ -43,7 +43,7 @@ export interface Stage<S extends string = DefaultStage> {
   fill?: Paint;
 }
 export interface Rect { x: number; y: number; width: number; height: number }
-export interface TooltipContext<S extends string = DefaultStage, M = unknown> {
+export interface ActiveContext<S extends string = DefaultStage, M = unknown> {
   segment: HypnogramSegment<S, M>;
   stage: Stage<S>;
   /** Normalized Unix milliseconds; original data remains in segment. */
@@ -53,12 +53,29 @@ export interface TooltipContext<S extends string = DefaultStage, M = unknown> {
   startLabel: string;
   endLabel: string;
   durationLabel: string;
+  /** Bar bounds in CSS px relative to the component's root. */
+  anchor: Rect;
+}
+export interface TooltipContext<S extends string = DefaultStage, M = unknown> extends ActiveContext<S, M> {
+  placement: 'top' | 'bottom';
+  /** Horizontal arrow position inside the tooltip, in CSS px. */
+  arrowOffset: number;
 }
 export interface TooltipOptions<S extends string = DefaultStage, M = unknown> {
   /** HTML content. Return null to hide the tooltip. */
   render?: (context: TooltipContext<S, M>) => ReactNode;
   style?: CSSProperties;
   className?: string;
+  placement?: 'top' | 'bottom';
+  offset?: number;
+  /** Edge clearance in px. */
+  boundaryPadding?: number;
+  /** Optional surrounding card; defaults to the component root. */
+  boundary?: () => HTMLElement | null;
+  /** Touch release delay in ms. */
+  hideDelay?: number;
+  /** Keep the tooltip on the selected interval. Default true. */
+  persistOnSelect?: boolean;
 }
 /** Visual properties only; the component owns region geometry and events. */
 export type HighlightStyle = Pick<SVGProps<SVGRectElement>,
@@ -96,6 +113,8 @@ export interface ConnectorOptions {
   enabled?: boolean;
   width?: number;
   maxGap?: number;
+  /** Minimum distance between stage row indices. Default 1. */
+  minStageDistance?: number;
 }
 
 export interface GridOptions {
@@ -116,12 +135,13 @@ export interface HypnogramBaseProps<S extends string = DefaultStage, M = unknown
   radius?: number;
   stageHeight?: number;
   barThickness?: number;
-  barHeight?: number;
   gap?: number;
-  rowGap?: number;
   connectors?: boolean | ConnectorOptions;
   connectorWidth?: number;
   grid?: boolean | GridOptions;
+  /** Override automatic plot margins, in px. */
+  plotPadding?: { top?: number; right?: number; bottom?: number; left?: number };
+  outlineStyle?: CSSProperties;
   axes?: boolean;
   /** Bottom strip for time labels; hiding them reclaims the space. */
   xLabels?: boolean;
@@ -135,6 +155,8 @@ export interface HypnogramBaseProps<S extends string = DefaultStage, M = unknown
   interaction?: InteractionOptions;
   onSelect?: (segment: HypnogramSegment<S, M> | null) => void;
   onSegmentClick?: (segment: HypnogramSegment<S, M>) => void;
+  /** Active interval and anchor, including when the built-in tooltip is disabled. */
+  onActiveChange?: (context: ActiveContext<S, M> | null) => void;
   /** Root HTML div; transparent background, no required stylesheet. */
   style?: CSSProperties;
   className?: string;
