@@ -7,7 +7,6 @@
   "sideEffects": false,
   "files": [
     "dist",
-    "docs",
     "README.md",
     "LICENSE"
   ],
@@ -59,6 +58,15 @@
     "chart",
     "svg",
     "typescript",
-    "timeline"
-  ]
+    "timeline",
+    "health"
+  ],
+  "homepage": "https://github.com/CrazyBucket/react-hypnogram#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CrazyBucket/react-hypnogram.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CrazyBucket/react-hypnogram/issues"
+  }
 }
