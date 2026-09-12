@@ -5,6 +5,8 @@ Customizable, lightweight SVG sleep-stage charts (Hypnograms) for React and Type
 [![CI](https://github.com/CrazyBucket/react-hypnogram/actions/workflows/ci.yml/badge.svg)](https://github.com/CrazyBucket/react-hypnogram/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
+[Live Demo](https://react-hypnogram.vercel.app)
+
 ![react-hypnogram preview](docs/assets/react-hypnogram-preview.jpg)
 
 - SVG rendering with configurable stages, spacing, rounded corners, and vertical gradient fills.
