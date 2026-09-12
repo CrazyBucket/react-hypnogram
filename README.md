@@ -4,6 +4,8 @@ Customizable, lightweight SVG sleep-stage charts (Hypnograms) for React and Type
 
 [![CI](https://github.com/CrazyBucket/react-hypnogram/actions/workflows/ci.yml/badge.svg)](https://github.com/CrazyBucket/react-hypnogram/actions)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![npm version](https://img.shields.io/npm/v/react-hypnogram.svg)](https://www.npmjs.com/package/react-hypnogram)
+[![npm downloads](https://img.shields.io/npm/dm/react-hypnogram.svg)](https://www.npmjs.com/package/react-hypnogram)
 
 [Live Demo](https://react-hypnogram.vercel.app)
 
