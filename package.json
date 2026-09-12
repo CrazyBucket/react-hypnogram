@@ -64,7 +64,7 @@
   "homepage": "https://github.com/CrazyBucket/react-hypnogram#readme",
   "repository": {
     "type": "git",
-    "url": "https://github.com/CrazyBucket/react-hypnogram.git"
+    "url": "git+https://github.com/CrazyBucket/react-hypnogram.git"
   },
   "bugs": {
     "url": "https://github.com/CrazyBucket/react-hypnogram/issues"
